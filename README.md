@@ -1,1 +1,287 @@
-# RFID
+# FM17660 RFID Library
+
+### ESP32 / Arduino • ISO14443A • MIFARE Classic
+
+A modular, reusable firmware library for the **Fudan Microelectronics FM17660 RFID Transceiver IC**, designed for **ESP32**, **Arduino** platforms.
+
+The library is structured into two independent layers:
+
+* **FM17660 Driver Layer** — Handles SPI communication, register access, FIFO management, IRQ handling, protocol loading, CRC configuration, and transceive operations.
+* **RFID Protocol Layer** — Implements ISO14443A card detection, anti-collision, UID extraction, card selection, authentication, block read, and block write operations.
+
+---
+
+# Features
+
+### FM17660 Driver Layer
+
+* SPI communication
+* Register read/write access
+* FIFO management
+* IRQ handling
+* Protocol loading
+* CRC configuration
+* Generic transceive engine
+* Error decoding
+* Collision detection support
+
+### RFID Protocol Layer
+
+* REQA card detection
+* Anti-collision procedure
+* UID extraction
+* Card selection (SELECT)
+* MIFARE Classic authentication
+* Block read operations
+* Block write operations
+* Support for 4-byte, 7-byte, and 10-byte UIDs
+
+---
+
+# Hardware Connections
+
+## ESP32 ↔ FM17660
+
+| ESP32 Pin | FM17660 Pin | Description  |
+| --------- | ----------- | ------------ |
+| GPIO23    | MOSI        | SPI Data Out |
+| GPIO19    | MISO        | SPI Data In  |
+| GPIO18    | SCK         | SPI Clock    |
+| GPIO5     | NSS / CS    | Chip Select  |
+| 3.3V      | VCC         | Power Supply |
+| GND       | GND         | Ground       |
+
+> FM17660 is a **3.3V device**. Do not connect directly to 5V systems.
+
+For custom SPI pins:
+
+```cpp
+FM17660 fm(csPin, sckPin, mosiPin, misoPin);
+```
+
+---
+
+# Architecture
+
+```text
+Application Layer
+│
+├── main.cpp
+│
+RFID Protocol Layer
+│
+├── rfid.h
+└── rfid.cpp
+│
+FM17660 Driver Layer
+│
+├── fm17660.h
+└── fm17660.cpp
+│
+SPI Bus
+│
+FM17660 Hardware
+│
+RFID Card
+```
+
+---
+
+# Project Structure
+
+```text
+FM17660/
+│
+├── include/
+│   ├── fm17660.h
+│   └── rfid.h
+│
+├── src/
+│   ├── fm17660.cpp
+│   ├── rfid.cpp
+│   └── main.cpp
+│
+├── examples/
+│   ├── read_uid/
+│   │   └── main.cpp
+│   │
+│   └── read_write_block/
+│       └── main.cpp
+│
+├── README.md
+└── platformio.ini
+```
+
+---
+
+# Supported Cards
+
+| Card Type         | Support         |
+| ----------------- | --------------- |
+| MIFARE Classic 1K | Supported       |
+| MIFARE Classic 4K | Supported       |
+| ISO14443A Cards   | Supported       |
+| 4-byte UID Cards  | Supported       |
+| 7-byte UID Cards  | Supported       |
+| 10-byte UID Cards | Supported       |
+
+---
+
+# Quick Start
+
+```cpp
+#include "fm17660.h"
+#include "rfid.h"
+
+FM17660 fm17660(5);
+RFID rfid(fm17660);
+
+void setup()
+{
+    Serial.begin(115200);
+
+    fm17660.begin();
+    rfid.begin();
+}
+
+void loop()
+{
+    UID uid;
+
+    if(rfid.readUID(uid))
+    {
+        uid.print(Serial);
+
+        rfid.haltCard();
+
+        delay(1000);
+    }
+}
+```
+
+---
+
+# API Reference
+
+## FM17660 Driver Layer
+
+| Function        | Description                          |
+| --------------- | ------------------------------------ |
+| begin()         | Initialize SPI and FM17660           |
+| reset()         | Software reset                       |
+| readReg()       | Read a register                      |
+| writeReg()      | Write a register                     |
+| modifyReg()     | Read-modify-write helper             |
+| flushFIFO()     | Clear FIFO buffer                    |
+| clearIRQ()      | Clear interrupt flags                |
+| enableCRC()     | Enable/disable hardware CRC          |
+| setTxLastBits() | Configure valid bits in last TX byte |
+| fifoLength()    | Get FIFO byte count                  |
+| writeFIFO()     | Write data to FIFO                   |
+| readFIFO()      | Read data from FIFO                  |
+| waitIRQ()       | Wait for interrupt event             |
+| waitIdle()      | Wait for command completion          |
+| loadProtocol()  | Load protocol configuration          |
+| transceive()    | Generic transmit/receive             |
+| lastError()     | Human-readable error information     |
+
+---
+
+## RFID Protocol Layer
+
+| Function              | Description                            |
+| --------------------- | -------------------------------------- |
+| begin()               | Load ISO14443A protocol                |
+| isCardPresent()       | Quick REQA card detection              |
+| requestA()            | Send REQA command                      |
+| readUID()             | Complete UID acquisition sequence      |
+| haltCard()            | Halt selected card                     |
+| authenticate()        | MIFARE authentication                  |
+| authenticateDefault() | Authentication using FF FF FF FF FF FF |
+| readBlock()           | Read 16-byte block                     |
+| writeBlock()          | Write 16-byte block                    |
+
+---
+
+# Library Layers
+
+## FM17660 Driver Layer
+
+Responsible for:
+
+* SPI communication
+* Register access
+* FIFO management
+* IRQ handling
+* CRC configuration
+* Protocol loading
+* Transceive operations
+* Error handling
+
+---
+
+## RFID Protocol Layer
+
+Responsible for:
+
+* Card detection
+* REQA / ATQA exchange
+* Anti-collision
+* UID extraction
+* Card selection
+* Authentication
+* Block read
+* Block write
+
+---
+
+# Key Design Decisions
+
+| Decision                                 | Reason                                            |
+| ---------------------------------------- | ------------------------------------------------- |
+| SPI at 5 MHz, Mode 0, MSB First          | Reliable operation on ESP32 and breadboard setups |
+| SPI.beginTransaction() per transfer      | Prevents conflicts with other SPI devices         |
+| IRQ cleared before every command         | Prevents stale interrupt flags                    |
+| FIFO-based communication                 | Matches FM17660 architecture                      |
+| CRC disabled for REQA and Anti-Collision | Required by ISO14443A                             |
+| CRC enabled for SELECT/Auth/Read/Write   | Required by protocol                              |
+| UID cascade handling                     | Supports 4, 7, and 10-byte UIDs                   |
+| haltCard() after transactions            | Prevents duplicate reads                          |
+| yield() inside wait loops                | Prevents ESP32 watchdog resets                    |
+
+---
+
+# Example Output
+
+```text
+=== FM17660 RFID Reader ===
+
+[OK] FM17660 Initialised
+[OK] ISO14443A Protocol Loaded
+
+Card Detected
+
+UID: 04 A2 B3 C4
+
+Authentication Successful
+
+Block 4:
+11 22 33 44 55 66 77 88
+99 AA BB CC DD EE FF 00
+```
+
+---
+
+# Future Improvements
+
+* STM32 support
+* RP2040 support
+* HAL abstraction layer
+* ISO14443B support
+* DMA-based SPI transfers
+
+---
+
+# Declaration
+Developed as part of the FM17660 RFID Firmware Library Project under BluPrints(Aadharshila Mobility Solutions Private Limited) by Nitigya Khaneja
+
